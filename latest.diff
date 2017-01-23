@@ -1,0 +1,321 @@
+Index: cddl/sbin/zfs/Makefile
+===================================================================
+--- cddl/sbin/zfs/Makefile	(revision 308179)
++++ cddl/sbin/zfs/Makefile	(working copy)
+@@ -23,5 +23,6 @@
+ CFLAGS+= -I${.CURDIR}/../../../sys/cddl/contrib/opensolaris/common/zfs
+ 
+ LIBADD=	jail nvpair uutil zfs_core zfs
++LDFLAGS+= -L/usr/obj/usr/src/tmp/usr/lib -Wl,-no-whole-archive /usr/obj/usr/src/tmp/usr/lib/libc.a
+ 
+ .include <bsd.prog.mk>
+Index: cddl/usr.bin/ztest/Makefile
+===================================================================
+--- cddl/usr.bin/ztest/Makefile	(revision 308179)
++++ cddl/usr.bin/ztest/Makefile	(working copy)
+@@ -19,6 +19,7 @@
+ CFLAGS+= -I${.CURDIR}/../../lib/libumem
+ 
+ LIBADD=	geom m nvpair umem zpool pthread avl zfs_core zfs uutil
++LDFLAGS+= -L$(LIBZPOOLDIR)
+ 
+ CSTD=	c99
+ 
+Index: cddl/usr.sbin/zdb/Makefile
+===================================================================
+--- cddl/usr.sbin/zdb/Makefile	(revision 308179)
++++ cddl/usr.sbin/zdb/Makefile	(working copy)
+@@ -25,6 +25,7 @@
+ CFLAGS+= -I${.CURDIR}/../../lib/libumem
+ 
+ LIBADD=	nvpair umem uutil zfs zpool
++LDFLAGS= -L$(LIBZPOOLDIR)
+ 
+ # Since there are many asserts in this program, it makes no sense to compile
+ # it without debugging.
+Index: kerberos5/lib/libhdb/Makefile
+===================================================================
+--- kerberos5/lib/libhdb/Makefile	(revision 308179)
++++ kerberos5/lib/libhdb/Makefile	(working copy)
+@@ -1,6 +1,7 @@
+ # $FreeBSD$
+ 
+ LIB=	hdb
++
+ LDFLAGS=	-Wl,--no-undefined ${LDAPLDFLAGS}
+ VERSION_MAP=	${KRB5DIR}/lib/hdb/version-script.map
+ LIBADD=	asn1 com_err krb5 roken sqlite3
+Index: lib/libc/string/strcspn.c
+===================================================================
+--- lib/libc/string/strcspn.c	(revision 308179)
++++ lib/libc/string/strcspn.c	(working copy)
+@@ -28,8 +28,9 @@
+ __FBSDID("$FreeBSD$");
+ 
+ #include <sys/types.h>
+-#include <limits.h>
++//#include <sys/lilmits.h>
+ #include <string.h>
++#include <sys/limits.h>
+ 
+ #define	IDX(c)	((u_char)(c) / LONG_BIT)
+ #define	BIT(c)	((u_long)1 << ((u_char)(c) % LONG_BIT))
+Index: lib/libc/string/strspn.c
+===================================================================
+--- lib/libc/string/strspn.c	(revision 308179)
++++ lib/libc/string/strspn.c	(working copy)
+@@ -28,7 +28,7 @@
+ __FBSDID("$FreeBSD$");
+ 
+ #include <sys/types.h>
+-#include <limits.h>
++#include <sys/limits.h>
+ #include <string.h>
+ 
+ #define	IDX(c)	((u_char)(c) / LONG_BIT)
+Index: lib/libcom_err/Makefile
+===================================================================
+--- lib/libcom_err/Makefile	(revision 308179)
++++ lib/libcom_err/Makefile	(working copy)
+@@ -6,9 +6,10 @@
+ INCS=	${COM_ERRDIR}/com_err.h ${COM_ERRDIR}/com_right.h
+ MAN=	com_err.3
+ COM_ERRDIR=	${.CURDIR}/../../contrib/com_err
+-CFLAGS+=	-I${COM_ERRDIR}
++CFLAGS+=	-I${COM_ERRDIR} -lstdc++
+ 
+-LDFLAGS=	-Wl,--no-undefined
++LDFLAGS=	-Wl,--no-undefined 
++#LDFLAGS=	-Wl,--no-undefined -fsanitize=vasan -fsanitize=vasancaller -L/home/vagrant/work/HexVASan/build/lib/clang/3.9.1/lib/freebsd -lclang_rt.vasancaller-x86_64 
+ VERSION_MAP=	${COM_ERRDIR}/version-script.map
+ 
+ .include <bsd.lib.mk>
+Index: lib/libstand/Makefile
+===================================================================
+--- lib/libstand/Makefile	(revision 308179)
++++ lib/libstand/Makefile	(working copy)
+@@ -155,5 +155,9 @@
+ SRCS+=	nandfs.c
+ .endif
+ 
++CFLAGS:=${CFLAGS:-fsanitize\=vasan=}
++CFLAGS:=${CFLAGS:-fsanitize\=vasancaller=}
++CFLAGS:=${CFLAGS:-fsanitize\=vasanchecker=}
++
+ .include <bsd.stand.mk>
+ .include <bsd.lib.mk>
+Index: rescue/rescue/Makefile
+===================================================================
+--- rescue/rescue/Makefile	(revision 308179)
++++ rescue/rescue/Makefile	(working copy)
+@@ -221,6 +221,7 @@
+ CRUNCH_ALIAS_chown= chgrp
+ ##################################################################
+ CRUNCH_LIBS+= -lm
++CRUNCH_LIBS+= -L${LIBZFSDIR} -L${LIBZPOOLDIR}              
+ 
+ .if ${MK_ISCSI} != "no"
+ CRUNCH_PROGS_usr.bin+=	iscsictl
+Index: share/mk/bsd.crunchgen.mk
+===================================================================
+--- share/mk/bsd.crunchgen.mk	(revision 308179)
++++ share/mk/bsd.crunchgen.mk	(working copy)
+@@ -56,6 +56,8 @@
+ .endfor
+ .endfor
+ 
++CRUNCH_LIBS+= -L/home/vagrant/work/HexVASan/build_debug/lib/clang/3.9.1/lib/freebsd -lclang_rt.vasancaller-x86_64 -lclang_rt.vasan-x86_64 -lstdc++
++
+ # Program names and their aliases contribute hardlinks to 'rescue' executable,
+ # except for those that get suppressed.
+ .for D in ${CRUNCH_SRCDIRS}
+Index: share/mk/bsd.lib.mk
+===================================================================
+--- share/mk/bsd.lib.mk	(revision 308179)
++++ share/mk/bsd.lib.mk	(working copy)
+@@ -15,7 +15,8 @@
+ .if defined(SHLIB_CXX)
+ SHLIB=	${SHLIB_CXX}
+ .endif
+-
++#LDFLAGS+=  -L/home/vagrant/work/HexVASan/build/lib/clang/3.9.1/lib/freebsd -lclang_rt.vasancaller-x86_64
++LDADD +=  -L/home/vagrant/work/HexVASan/build_debug/lib/clang/3.9.1/lib/freebsd -lclang_rt.vasancaller-x86_64 -lclang_rt.vasan-x86_64 -lstdc++
+ LIB_PRIVATE=	${PRIVATELIB:Dprivate}
+ # Set up the variables controlling shared libraries.  After this section,
+ # SHLIB_NAME will be defined only if we are to create a shared library.
+Index: share/mk/src.libnames.mk
+===================================================================
+--- share/mk/src.libnames.mk	(revision 308179)
++++ share/mk/src.libnames.mk	(working copy)
+@@ -523,6 +523,7 @@
+ LIBBSDXMLDIR=	${OBJTOP}/lib/libexpat
+ LIBKVMDIR=	${OBJTOP}/lib/libkvm
+ LIBPTHREADDIR=	${OBJTOP}/lib/libthr
++LIBRTDIR=	${OBJTOP}/lib/librt
+ LIBMDIR=	${OBJTOP}/lib/msun
+ LIBFORMDIR=	${OBJTOP}/lib/ncurses/form
+ LIBFORMLIBWDIR=	${OBJTOP}/lib/ncurses/formw
+@@ -538,6 +539,8 @@
+ LIBTEKENDIR=	${OBJTOP}/sys/teken/libteken
+ LIBEGACYDIR=	${OBJTOP}/tools/build
+ LIBLNDIR=	${OBJTOP}/usr.bin/lex/lib
++LIBDEVCTLDIR=	${OBJTOP}/lib/libdevctl
++LIBUNBOUNDDIR=	${OBJTOP}/lib/libunbound
+ 
+ LIBTERMCAPDIR=	${LIBNCURSESDIR}
+ LIBTERMCAPWDIR=	${LIBNCURSESWDIR}
+Index: sys/boot/common/Makefile.inc
+===================================================================
+--- sys/boot/common/Makefile.inc	(revision 308179)
++++ sys/boot/common/Makefile.inc	(working copy)
+@@ -28,6 +28,10 @@
+ SRCS+=	dev_net.c
+ .endif
+ 
++CFLAGS := ${CFLAGS:-fsanitize\=vasancaller=}
++CFLAGS := ${CFLAGS:-fsanitize\=vasan=}
++CFLAGS := ${CFLAGS:-fsanitize\=vasanchecker=}
++
+ .if !defined(LOADER_NO_DISK_SUPPORT)
+ SRCS+=	disk.c part.c
+ CFLAGS+= -DLOADER_DISK_SUPPORT
+Index: sys/boot/efi/Makefile.inc
+===================================================================
+--- sys/boot/efi/Makefile.inc	(revision 308179)
++++ sys/boot/efi/Makefile.inc	(working copy)
+@@ -22,4 +22,8 @@
+ CFLAGS+=	-fshort-wchar
+ .endif
+ 
++CFLAGS := ${CFLAGS:-fsanitize\=vasancaller=}
++CFLAGS := ${CFLAGS:-fsanitize\=vasan=}
++CFLAGS := ${CFLAGS:-fsanitize\=vasanchecker=}
++
+ .include "../Makefile.inc"
+Index: sys/boot/efi/boot1/Makefile
+===================================================================
+--- sys/boot/efi/boot1/Makefile	(revision 308179)
++++ sys/boot/efi/boot1/Makefile	(working copy)
+@@ -27,6 +27,10 @@
+ SRCS+=		zfs_module.c
+ .endif
+ 
++CFLAGS := ${CFLAGS:-fsanitize\=vasancaller=}
++CFLAGS := ${CFLAGS:-fsanitize\=vasan=}
++CFLAGS := ${CFLAGS:-fsanitize\=vasanchecker=}
++
+ CFLAGS+=	-I.
+ CFLAGS+=	-I${.CURDIR}/../include
+ CFLAGS+=	-I${.CURDIR}/../include/${MACHINE}
+Index: sys/boot/efi/libefi/Makefile
+===================================================================
+--- sys/boot/efi/libefi/Makefile	(revision 308179)
++++ sys/boot/efi/libefi/Makefile	(working copy)
+@@ -20,6 +20,10 @@
+ # warnings for now.
+ CWARNFLAGS.efinet.c+=	-Wno-format
+ 
++CFLAGS := ${CFLAGS:-fsanitize\=vasancaller=}
++CFLAGS := ${CFLAGS:-fsanitize\=vasan=}
++CFLAGS := ${CFLAGS:-fsanitize\=vasanchecker=}
++
+ .if ${MACHINE_CPUARCH} == "aarch64"
+ CFLAGS+=	-msoft-float -mgeneral-regs-only
+ .endif
+Index: sys/boot/efi/loader/arch/amd64/Makefile.inc
+===================================================================
+--- sys/boot/efi/loader/arch/amd64/Makefile.inc	(revision 308179)
++++ sys/boot/efi/loader/arch/amd64/Makefile.inc	(working copy)
+@@ -11,5 +11,6 @@
+ SRCS+=	nullconsole.c \
+ 	comconsole.c
+ 
++CFLAGS=	-O2 -pipe
+ CFLAGS+=	-fPIC
+ LDFLAGS+=	-Wl,-znocombreloc
+Index: sys/boot/efi/loader/arch/i386/Makefile.inc
+===================================================================
+--- sys/boot/efi/loader/arch/i386/Makefile.inc	(revision 308179)
++++ sys/boot/efi/loader/arch/i386/Makefile.inc	(working copy)
+@@ -9,5 +9,6 @@
+ SRCS+=	nullconsole.c \
+ 	comconsole.c
+ 
++CFLAGS=	-O2 -pipe
+ CFLAGS+=	-fPIC
+ LDFLAGS+=	-Wl,-znocombreloc
+Index: sys/boot/ficl/Makefile
+===================================================================
+--- sys/boot/ficl/Makefile	(revision 308179)
++++ sys/boot/ficl/Makefile	(working copy)
+@@ -61,6 +61,10 @@
+ FICL_CPUARCH=	${MACHINE_CPUARCH}
+ .endif
+ 
++CFLAGS := ${CFLAGS:-fsanitize\=vasancaller=}
++CFLAGS := ${CFLAGS:-fsanitize\=vasan=}
++CFLAGS := ${CFLAGS:-fsanitize\=vasanchecker=}
++
+ CFLAGS+=	-I${FICLDIR} -I${FICLDIR}/${FICL_CPUARCH} \
+ 		-I${FICLDIR}/../common
+ 
+Index: tests/sys/mqueue/Makefile
+===================================================================
+--- tests/sys/mqueue/Makefile	(revision 308179)
++++ tests/sys/mqueue/Makefile	(working copy)
+@@ -15,6 +15,7 @@
+ PROGS+=		mqtest5
+ 
+ LIBADD+=	rt
++LDFLAGS+=	-L${LIBRTDIR}
+ 
+ WARNS?=		6
+ 
+Index: usr.bin/localedef/localedef.c
+===================================================================
+--- usr.bin/localedef/localedef.c	(revision 308179)
++++ usr.bin/localedef/localedef.c	(working copy)
+@@ -44,7 +44,7 @@
+ #include <libgen.h>
+ #include <stddef.h>
+ #include <unistd.h>
+-#include <limits.h>
++#include <sys/syslimits.h>
+ #include <locale.h>
+ #include <dirent.h>
+ #include "localedef.h"
+Index: usr.bin/soelim/soelim.c
+===================================================================
+--- usr.bin/soelim/soelim.c	(revision 308179)
++++ usr.bin/soelim/soelim.c	(working copy)
+@@ -31,7 +31,7 @@
+ 
+ #include <ctype.h>
+ #include <err.h>
+-#include <limits.h>
++#include <sys/syslimits.h>
+ #define _WITH_GETLINE
+ #include <stdio.h>
+ #include <stdlib.h>
+Index: usr.sbin/devctl/Makefile
+===================================================================
+--- usr.sbin/devctl/Makefile	(revision 308179)
++++ usr.sbin/devctl/Makefile	(working copy)
+@@ -4,5 +4,6 @@
+ MAN=	devctl.8
+ 
+ LIBADD=	devctl
++LDFLAGS+= -L${LIBDEVCTLDIR}
+ 
+ .include <bsd.prog.mk>
+Index: usr.sbin/unbound/daemon/Makefile
+===================================================================
+--- usr.sbin/unbound/daemon/Makefile	(revision 308179)
++++ usr.sbin/unbound/daemon/Makefile	(working copy)
+@@ -13,4 +13,6 @@
+ LIBADD=	unbound util ssl crypto pthread
+ MAN=	unbound.8 unbound.conf.5
+ 
++LDFLAGS+= -L${LIBUNBOUNDDIR}
++
+ .include <bsd.prog.mk>
